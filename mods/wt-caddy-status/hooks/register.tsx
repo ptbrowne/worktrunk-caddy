@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { CADDY_PORT, notRegistered, parseDefined, routesFor, statusText, type Defined, type Route } from './format'
+import { notRegistered, parseDefined, routesFor, statusText, type Defined, type Route } from './format'
 
 const PANE = 'servers'
 const routes = atom({ plugin: 'wt-caddy-status', key: 'routes' } as const, [])
@@ -74,10 +74,6 @@ const openFocused = async ($: EngineInterface) => {
   if (!opened.isPlaced) $.ui.toast(`/servers: pane not shown (${opened.reason})`)
 }
 
-const openUrl = async ($: EngineInterface, r: Route) => {
-  await $.process.run(['open', `http://${r.host}:${CADDY_PORT}`])
-}
-
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     home = (await $.env.get('HOME')) ?? ''
@@ -93,7 +89,7 @@ export const register: Register = on => {
     await loadDefined($)
     await openFocused($)
     $.clock.after(200, () => openFocused($))
-    return { text: 'Dev servers pane opened. Tab or arrows move, Enter presses, Esc closes. If keys do not reach it, press ctrl+x then Tab.' }
+    return { text: 'Dev servers pane opened. Up/Down move, Enter presses, Esc closes. If keys do not reach it, press ctrl+x then Tab.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -110,13 +106,11 @@ export const register: Register = on => {
             <Text>
               {r.up ? '●' : '○'} {(r.service === 'main' ? 'dev' : r.service).padEnd(12)}
             </Text>
-            <Button key={`start:${r.service}`} label="start" autoFocus={r === list[0] ? true : undefined} onPress={() => run($, 'start', r)} />
-            <Button key={`stop:${r.service}`} label="stop" onPress={() => run($, 'stop', r)} />
-            <Button key={`restart:${r.service}`} label="restart" onPress={() => run($, 'restart', r)} />
             <Button
-              key={`open:${r.service}`}
-              label="open"
-              onPress={() => openUrl($, r)}
+              key={`toggle:${r.service}`}
+              label={r.up ? 'stop' : 'start'}
+              autoFocus={r === list[0] ? true : undefined}
+              onPress={() => run($, r.up ? 'stop' : 'start', r)}
             />
           </Box>
         ))}
@@ -127,7 +121,7 @@ export const register: Register = on => {
             <Text dimColor> not started</Text>
           </Box>
         ))}
-        <Text dimColor>Tab/arrows move, Enter presses, Esc closes</Text>
+        <Text dimColor>Up/Down move, Enter presses, Esc closes</Text>
       </Box>
     )
   })
