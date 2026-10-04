@@ -17,7 +17,7 @@ Run what is missing; skip what already works.
    cat > ~/bin/wt-caddy <<'SH'
    #!/bin/sh
    # Hosts like Claude Code mods run without the interactive shell's PATH: add the usual node and pnpm homes.
-   PATH="$PATH:$HOME/.local/share/fnm/aliases/default/bin:$HOME/Library/pnpm:/opt/homebrew/bin"
+   PATH="$PATH:$HOME/.local/share/fnm/aliases/default/bin:$HOME/Library/pnpm/bin:/opt/homebrew/bin"
    # The flag makes Node 22.6-23.5 run the .ts file too; newer versions ignore it.
    exec node --experimental-strip-types --disable-warning=ExperimentalWarning "$HOME/.local/share/wt-caddy/wt-caddy.ts" "$@"
    SH
