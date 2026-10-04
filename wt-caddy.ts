@@ -190,7 +190,7 @@ const usage = `wt-caddy: Caddy routes and live dashboard for worktree dev server
 
   wt-caddy add <repo> <branch> <port> [--service <name>] [--path <dir>] [--rewrite-host]
   wt-caddy rm <repo> <branch> [--service <name>] [--kill]   (no --service: all; --kill stops the servers)
-  wt-caddy ls
+  wt-caddy ls [--json]
   wt-caddy gc                  drop routes whose worktree directory is gone
   wt-caddy service             start dashboard (and Caddy) if not running`;
 
@@ -199,7 +199,7 @@ const main = async () => {
   const flags: Record<string, string> = {};
   const pos: string[] = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === "--kill" || rest[i] === "--rewrite-host") flags[rest[i].slice(2)] = "";
+    if (rest[i] === "--kill" || rest[i] === "--rewrite-host" || rest[i] === "--json") flags[rest[i].slice(2)] = "";
     else if (rest[i].startsWith("--")) flags[rest[i].slice(2)] = rest[++i] ?? "";
     else pos.push(rest[i]);
   }
@@ -245,7 +245,12 @@ const main = async () => {
       break;
     }
     case "ls": {
-      for (const r of await statuses(readRoutes())) console.log(`${r.up ? "up  " : "down"}  ${url(r.host)}  :${r.port}  ${r.path}`);
+      const all = await statuses(readRoutes());
+      if ("json" in flags) {
+        console.log(JSON.stringify(all));
+        break;
+      }
+      for (const r of all) console.log(`${r.up ? "up  " : "down"}  ${url(r.host)}  :${r.port}  ${r.path}`);
       break;
     }
     case "service": {

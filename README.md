@@ -5,7 +5,7 @@ Routes git-worktree dev servers through Caddy and shows them on a live dashboard
 ```
 wt-caddy add <repo> <branch> <port> [--service name] [--path dir] [--rewrite-host]
 wt-caddy rm  <repo> <branch> [--service name] [--kill]
-wt-caddy ls
+wt-caddy ls [--json]
 wt-caddy gc        # drop routes whose worktree directory is gone
 wt-caddy service   # start Caddy and the dashboard if they aren't running
 ```
