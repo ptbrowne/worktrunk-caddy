@@ -1,0 +1,7 @@
+{
+  "name": "wt-caddy",
+  "owner": { "name": "wt-caddy" },
+  "plugins": [
+    { "name": "wt-caddy", "source": "./", "description": "Worktree dev server URLs for worktrunk, plus setup skills" }
+  ]
+}

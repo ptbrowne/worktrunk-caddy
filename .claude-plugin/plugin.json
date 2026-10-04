@@ -1,0 +1,5 @@
+{
+  "name": "wt-caddy",
+  "description": "Per-worktree dev server URLs (<branch>.<repo>.localhost) for worktrunk, with a live dashboard. Skills set up the machine and each repo.",
+  "version": "0.1.0"
+}

@@ -10,8 +10,8 @@ wt-caddy gc        # drop routes whose worktree directory is gone
 wt-caddy service   # start Caddy and the dashboard if they aren't running
 ```
 
-- URL: `<branch>.<repo>.test:8080`, or `<service>.<branch>.<repo>.test:8080`. `*.test` resolves through dnsmasq.
-- Dashboard: `http://wt.test:8080` (live over SSE). Started automatically by `add`.
+- URL: `<branch>.<repo>.localhost:8080`, or `<service>.<branch>.<repo>.localhost:8080`. `*.localhost` resolves to loopback in browsers, so no DNS setup.
+- Dashboard: `http://wt.localhost:8080` (live over SSE). Started automatically by `add`.
 - Registry: `~/.local/state/wt-caddy/routes.json`. Every change replaces the whole Caddy server config.
 - `--rewrite-host` sends `Host: localhost:<port>` upstream, for servers with a host allowlist (Storybook).
 - `--kill` on `rm` stops whatever listens on the removed ports.

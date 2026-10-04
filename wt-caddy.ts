@@ -13,7 +13,7 @@ type RouteStatus = Route & { host: string; up: boolean };
 
 const CADDY_ADMIN = "http://localhost:2019";
 const CADDY_PORT = 8080;
-const TLD = "test";
+const TLD = "localhost"; // browsers resolve *.localhost to loopback, no DNS setup needed
 const DASHBOARD_PORT = 8079;
 const DASHBOARD_HOST = `wt.${TLD}`;
 const MAIN_SERVICE = "main";
@@ -97,7 +97,7 @@ const ensureCaddy = async () => {
   execFileSync("caddy", ["start"], { stdio: "ignore" });
 };
 
-// rewriteHost: for dev servers with a host allowlist (Storybook) that can't be told about *.test.
+// rewriteHost: for dev servers with a host allowlist (Storybook) that can't be told about *.localhost.
 const caddyRoute = (host: string, port: number, rewriteHost = false) => ({
   match: [{ host: [host] }],
   handle: [
