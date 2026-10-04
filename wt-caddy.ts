@@ -8,8 +8,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-type Route = { repo: string; branch: string; service: string; port: number; path: string; rewriteHost?: boolean; cmd?: string };
-type RouteStatus = Route & { host: string; up: boolean };
+export type Route = { repo: string; branch: string; service: string; port: number; path: string; rewriteHost?: boolean; cmd?: string };
+export type RouteStatus =Route & { host: string; up: boolean };
 
 const CADDY_ADMIN = "http://localhost:2019";
 const CADDY_PORT = 8080;
@@ -96,7 +96,16 @@ const readConfig = (): Config => {
   return config;
 };
 
-const expandHome = (p: string) => (p.startsWith("~/") ? join(homedir(), p.slice(2)) : p);
+// Shows a route's log via config "logs.open". Returns false when none is configured.
+const openLog = (r: Route) => {
+  const open = readConfig().logs?.open;
+  if (!open) return false;
+  const title = `${r.service === MAIN_SERVICE ? "dev" : r.service} · ${r.branch}`;
+  execFileSync("sh", ["-c", open.replaceAll("{log}", shellQuote(routeLogFile(r))).replaceAll("{title}", shellQuote(title))], { stdio: "ignore" });
+  return true;
+};
+
+const expandHome =(p: string) => (p.startsWith("~/") ? join(homedir(), p.slice(2)) : p);
 
 // Added after the existing PATH, so the caller's own tools win.
 const applyConfigPath = () => {
@@ -265,6 +274,7 @@ const usage = `wt-caddy: Caddy routes and live dashboard for worktree dev server
   wt-caddy rm <repo> <branch> [--service <name>] [--kill]   (no --service: all; --kill stops the servers)
   wt-caddy ls [--json]
   wt-caddy logs <repo> <branch> [--service <name>] [--open]   print the log path, or show it via config logs.open
+  wt-caddy ui                 interactive list: start/stop/restart, open the URL, tail logs
   wt-caddy hooks | hook <name>   post-start hooks of this worktree as JSON | run one (used by the Claude Code mod)
   wt-caddy gc                  drop routes whose worktree directory is gone
   wt-caddy service             start dashboard (and Caddy) if not running`;
@@ -339,11 +349,8 @@ const main = async () => {
       if (!r) throw new Error(`no route for ${repo} ${branch} ${slot.service}`);
       const file = routeLogFile(r);
       if (!existsSync(file)) throw new Error(`no log yet: ${file}`);
-      const open = readConfig().logs?.open;
-      if ("open" in flags && open) {
-        const title = `${r.service === MAIN_SERVICE ? "dev" : r.service} · ${r.branch}`;
-        execFileSync("sh", ["-c", open.replaceAll("{log}", shellQuote(file)).replaceAll("{title}", shellQuote(title))], { stdio: "inherit" });
-      } else console.log(file);
+      if ("open" in flags && readConfig().logs?.open) openLog(r);
+      else console.log(file);
       break;
     }
     case "hooks": // the post-start hooks of the worktree in the current directory, as JSON (for the Claude Code mod)
@@ -379,6 +386,11 @@ const main = async () => {
     case "service": {
       await withLock(async () => applyCaddy(readRoutes()));
       console.log((await ensureService()) ? `started: ${url(DASHBOARD_HOST)}` : `already running: ${url(DASHBOARD_HOST)}`);
+      break;
+    }
+    case "ui": {
+      const { runUi } = await import("./ui.ts");
+      await runUi({ stateDir, readRoutes, statuses, startRoute, killListeners, routeLogFile, openLog, urlOf: (r) => url(hostFor(r)), isListening, sleep });
       break;
     }
     case "__serve":

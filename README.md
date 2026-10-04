@@ -8,6 +8,7 @@ wt-caddy start|stop|restart <repo> <branch> [--service name]
 wt-caddy rm  <repo> <branch> [--service name] [--kill]
 wt-caddy ls [--json]
 wt-caddy logs <repo> <branch> [--service name] [--open]   # path, or show it via config logs.open
+wt-caddy ui       # interactive list: start/stop/restart, open the URL, tail logs
 wt-caddy gc        # drop routes whose worktree directory is gone
 wt-caddy service   # start Caddy and the dashboard if they aren't running
 ```
@@ -19,7 +20,7 @@ wt-caddy service   # start Caddy and the dashboard if they aren't running
 - `--kill` on `rm` stops whatever listens on the removed ports.
 
 Needs Node 22.6+ (runs the `.ts` file directly; the shim passes `--experimental-strip-types`). `~/bin/wt-caddy` is a shim around `wt-caddy.ts`.
-Hooks: see `~/.claude/skills/setup-wt/SKILL.md`.
+Hooks: see `~/.claude/skills/setup-wt/SKILL.md`. More in [docs/](docs/README.md).
 
 ## Config
 
@@ -36,5 +37,5 @@ Hooks: see `~/.claude/skills/setup-wt/SKILL.md`.
 }
 ```
 
-The `~/bin/wt-caddy` shim only has to find `node`; the rest of PATH comes from this file. For tmux use `tmux split-window -v "tail -f {log}"`.
+The `~/bin/wt-caddy` shim only has to find `node`; the rest of PATH comes from this file. The UI's `l` key uses the same `logs.open`. For tmux use `tmux split-window -v "tail -f {log}"`.
 Logs exist for services started by `wt-caddy` (`add --start`, `start`, `restart`) in `~/.local/state/wt-caddy/logs/`. Each start begins a fresh log and keeps the previous run once as `<name>.log.1`; `rm` and `gc` delete a removed route's logs. A single run's log is not rotated.
