@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wt-caddy</title>
+<style>
+  :root { color-scheme: light dark; --muted: #888; --up: #2da44e; --down: #cf222e; }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.1rem; display: flex; gap: .5rem; align-items: center; }
+  h2 { font-size: .95rem; margin: 1.5rem 0 .25rem; color: var(--muted); font-weight: 600; }
+  .row { display: grid; grid-template-columns: 1rem 1fr auto; gap: .5rem; padding: .25rem 0; align-items: center; }
+  .dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--down); }
+  .up .dot { background: var(--up); }
+  .meta { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+  .live { font-size: .75rem; color: var(--muted); font-weight: 400; }
+  a { color: inherit; }
+</style>
+<h1>Worktree servers <span class="live" id="live">connecting…</span></h1>
+<div id="list"></div>
+<script>
+  const list = document.getElementById("list"), live = document.getElementById("live");
+  const render = (routes) => {
+    const byRepo = Map.groupBy(routes, (r) => r.repo);
+    list.replaceChildren(...[...byRepo].sort().flatMap(([repo, rs]) => {
+      const h = Object.assign(document.createElement("h2"), { textContent: repo });
+      const rows = rs.sort((a, b) => a.branch.localeCompare(b.branch) || a.service.localeCompare(b.service)).map((r) => {
+        const row = document.createElement("div");
+        row.className = "row " + (r.up ? "up" : "down");
+        const a = Object.assign(document.createElement("a"), { href: `http://${r.host}:8080`, textContent: `${r.branch}${r.service === "main" ? "" : " · " + r.service}` });
+        const meta = Object.assign(document.createElement("span"), { className: "meta", textContent: `:${r.port}` });
+        row.append(Object.assign(document.createElement("span"), { className: "dot" }), a, meta);
+        return row;
+      });
+      return [h, ...rows];
+    }));
+    if (!routes.length) list.textContent = "No routes registered.";
+  };
+  const es = new EventSource("/events");
+  es.onopen = () => (live.textContent = "live");
+  es.onerror = () => (live.textContent = "reconnecting…");
+  es.onmessage = (e) => render(JSON.parse(e.data));
+</script>
