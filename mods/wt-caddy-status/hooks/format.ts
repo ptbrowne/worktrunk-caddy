@@ -8,12 +8,12 @@ export const routesFor = (routes: readonly Route[], cwd: string): Route[] =>
     .filter((r) => cwd === r.path || cwd.startsWith(`${r.path}/`))
     .sort((a, b) => Number(b.service === "main") - Number(a.service === "main") || a.service.localeCompare(b.service));
 
-// "● dev  ● storybook  ○ server · branch.repo.localhost:8080", or undefined when the worktree has no routes.
+// "● dev  ● storybook  ○ server · http://branch.repo.localhost:8080", or undefined when the worktree has no routes.
 export const statusText = (routes: readonly Route[], cwd: string): string | undefined => {
   const mine = routesFor(routes, cwd);
   if (mine.length === 0) return undefined;
   const dots = mine.map((r) => `${r.up ? "●" : "○"} ${r.service === "main" ? "dev" : r.service}`).join("  ");
-  return `${dots} · ${mine[0].host}:${CADDY_PORT}`;
+  return `${dots} · http://${mine[0].host}:${CADDY_PORT}`;
 };
 
 export type Defined = { name: string; service: string };

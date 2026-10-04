@@ -19,7 +19,7 @@ test('a subdirectory of the worktree matches, a sibling prefix does not', () => 
 })
 
 test('status shows liveness per service and the main URL', () => {
-  expect(statusText(routes, wt)).toBe('● dev  ○ server  ● storybook · feat.repo.localhost:8080')
+  expect(statusText(routes, wt)).toBe('● dev  ○ server  ● storybook · http://feat.repo.localhost:8080')
 })
 
 test('no routes, no status', () => {
