@@ -1,12 +1,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { CADDY_PORT, routesFor, statusText, type Route } from './format'
+import { CADDY_PORT, notRegistered, parseDefined, routesFor, statusText, type Defined, type Route } from './format'
 
 const PANE = 'servers'
 const routes = atom({ plugin: 'wt-caddy-status', key: 'routes' } as const, [])
+const defined = atom({ plugin: 'wt-caddy-status', key: 'defined' } as const, [])
+
+// wt is a shell function in interactive shells; the binary is where brew puts it.
+const WT = '/opt/homebrew/bin/wt'
+
+// Hooks run wt-caddy by name, and a mod's process has no interactive PATH.
+const wtEnv = () => ({ PATH: `${home}/bin:/opt/homebrew/bin:/usr/bin:/bin` })
 
 let bin = ''
+let home = ''
 let lastStatus: string | undefined
 let lastRoutes = ''
 
@@ -35,6 +43,24 @@ const refresh = async ($: EngineInterface) => {
   }
 }
 
+// The services this worktree's post-start hooks define, registered or not.
+const loadDefined = async ($: EngineInterface) => {
+  try {
+    const ran = await $.process.run([WT, 'hook', 'show', 'post-start', '--expanded', '--format', 'json'], { timeoutMs: 10000, env: wtEnv() })
+    const hooks = JSON.parse(ran.stdout) as { name: string; expanded: string }[]
+    await update($, defined, () => parseDefined(hooks))
+  } catch {
+    await update($, defined, () => [])
+  }
+}
+
+// Runs the one hook that registers and starts a defined service.
+const startDefined = async ($: EngineInterface, d: Defined) => {
+  await $.process.run([WT, 'hook', 'post-start', d.name], { timeoutMs: 20000, env: wtEnv() })
+  await refresh($)
+  await loadDefined($)
+}
+
 // verb is a wt-caddy subcommand; the pane redraws once the refresh sees the new state.
 const run = async ($: EngineInterface, verb: string, r: Route) => {
   await $.process.run([bin, verb, r.repo, r.branch, '--service', r.service], { timeoutMs: 20000 })
@@ -54,7 +80,8 @@ const openUrl = async ($: EngineInterface, r: Route) => {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    bin = `${await $.env.get('HOME')}/bin/wt-caddy`
+    home = (await $.env.get('HOME')) ?? ''
+    bin = `${home}/bin/wt-caddy`
     await $.command.register({ name: 'servers', description: 'Start, stop and open this worktree\'s dev servers' })
     $.clock.every(3000, () => refresh($))
     await refresh($)
@@ -63,6 +90,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'servers' }, async $ => {
     await refresh($)
+    await loadDefined($)
     await openFocused($)
     $.clock.after(200, () => openFocused($))
     return { text: 'Dev servers pane opened. Tab or arrows move, Enter presses, Esc closes. If keys do not reach it, press ctrl+x then Tab.' }
@@ -71,8 +99,9 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, routes)
+    const idle = notRegistered(await read($, defined), list)
 
-    if (list.length === 0) return <Text dimColor>No dev servers registered for this worktree.</Text>
+    if (list.length === 0 && idle.length === 0) return <Text dimColor>No dev servers defined for this worktree.</Text>
 
     return (
       <Box flexDirection="column">
@@ -89,6 +118,13 @@ export const register: Register = on => {
               label="open"
               onPress={() => openUrl($, r)}
             />
+          </Box>
+        ))}
+        {idle.map(d => (
+          <Box key={`idle:${d.service}`} flexDirection="row">
+            <Text dimColor>○ {(d.service === 'main' ? 'dev' : d.service).padEnd(12)}</Text>
+            <Button key={`startdef:${d.service}`} label="start" onPress={() => startDefined($, d)} />
+            <Text dimColor> not started</Text>
           </Box>
         ))}
         <Text dimColor>Tab/arrows move, Enter presses, Esc closes</Text>

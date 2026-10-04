@@ -9,7 +9,7 @@ description: Install and use wt-caddy, which gives every git worktree dev server
 
 Run what is missing; skip what already works.
 
-1. **Tools:** `brew install caddy worktrunk` (needs `wt` 0.80+ for `wt caddy` and the current hook format; `wt --version`). Node 22.18+ (runs the `.ts` file directly).
+1. **Tools:** `brew install caddy worktrunk` (needs `wt` 0.80+ for `wt caddy` and the current hook format; `wt --version`). Node 22.6+ (runs the `.ts` file directly; the shim below passes the strip-types flag older ones need).
 2. **Install the tool.** This skill sits in `<plugin>/skills/wt-caddy/`; the tool is two directories up (`../../wt-caddy.ts`, `../../dashboard.html`). Copy both so the install survives plugin updates:
    ```bash
    mkdir -p ~/.local/share/wt-caddy ~/bin
@@ -18,7 +18,8 @@ Run what is missing; skip what already works.
    #!/bin/sh
    # Hosts like Claude Code mods run without the interactive shell's PATH: add the usual node and pnpm homes.
    PATH="$PATH:$HOME/.local/share/fnm/aliases/default/bin:$HOME/Library/pnpm:/opt/homebrew/bin"
-   exec node "$HOME/.local/share/wt-caddy/wt-caddy.ts" "$@"
+   # The flag makes Node 22.6-23.5 run the .ts file too; newer versions ignore it.
+   exec node --experimental-strip-types --disable-warning=ExperimentalWarning "$HOME/.local/share/wt-caddy/wt-caddy.ts" "$@"
    SH
    chmod +x ~/bin/wt-caddy
    ```

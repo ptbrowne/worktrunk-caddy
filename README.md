@@ -17,5 +17,5 @@ wt-caddy service   # start Caddy and the dashboard if they aren't running
 - `--rewrite-host` sends `Host: localhost:<port>` upstream, for servers with a host allowlist (Storybook).
 - `--kill` on `rm` stops whatever listens on the removed ports.
 
-Needs Node 22.18+ (runs the `.ts` file directly). `~/bin/wt-caddy` is a shim around `wt-caddy.ts`.
+Needs Node 22.6+ (runs the `.ts` file directly; the shim passes `--experimental-strip-types`). `~/bin/wt-caddy` is a shim around `wt-caddy.ts`.
 Hooks: see `~/.claude/skills/setup-wt/SKILL.md`.

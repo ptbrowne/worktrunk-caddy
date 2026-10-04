@@ -15,3 +15,16 @@ export const statusText = (routes: readonly Route[], cwd: string): string | unde
   const dots = mine.map((r) => `${r.up ? "●" : "○"} ${r.service === "main" ? "dev" : r.service}`).join("  ");
   return `${dots} · ${mine[0].host}:${CADDY_PORT}`;
 };
+
+export type Defined = { name: string; service: string };
+
+// The services a repo's post-start hooks would register: `wt hook show post-start --expanded --format json`
+// entries that run `wt-caddy add`, the service taken from `--service` (none means the main one).
+export const parseDefined = (hooks: readonly { name: string; expanded: string }[]): Defined[] =>
+  hooks
+    .filter((h) => h.expanded.startsWith("wt-caddy add "))
+    .map((h) => ({ name: h.name, service: /--service (\S+)/.exec(h.expanded)?.[1] ?? "main" }));
+
+// Defined services with no route yet in this worktree.
+export const notRegistered = (defined: readonly Defined[], routes: readonly Route[]): Defined[] =>
+  defined.filter((d) => !routes.some((r) => r.service === d.service));
