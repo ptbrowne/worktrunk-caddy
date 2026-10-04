@@ -41,6 +41,13 @@ const run = async ($: EngineInterface, verb: string, r: Route) => {
   await refresh($)
 }
 
+// Asking for the keyboard is only a request: the surface refuses it while the composer still holds
+// the typed "/servers", so this is called again once the command has run.
+const openFocused = async ($: EngineInterface) => {
+  const opened = await $.ui.open({ id: PANE, title: 'Dev servers', focus: true, closeOnEscape: true })
+  if (!opened.isPlaced) $.ui.toast(`/servers: pane not shown (${opened.reason})`)
+}
+
 const openUrl = async ($: EngineInterface, r: Route) => {
   await $.process.run(['open', `http://${r.host}:${CADDY_PORT}`])
 }
@@ -56,8 +63,9 @@ export const register: Register = on => {
 
   on('command.run', { command: 'servers' }, async $ => {
     await refresh($)
-    await $.ui.open({ id: PANE, title: 'Dev servers', focus: true, closeOnEscape: true })
-    return { text: 'Dev servers: Tab or arrows to move, Enter to press, Esc to close.' }
+    await openFocused($)
+    $.clock.after(200, () => openFocused($))
+    return { text: 'Dev servers pane opened. Tab or arrows move, Enter presses, Esc closes. If keys do not reach it, press ctrl+x then Tab.' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
