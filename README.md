@@ -37,4 +37,4 @@ Hooks: see `~/.claude/skills/setup-wt/SKILL.md`.
 ```
 
 The `~/bin/wt-caddy` shim only has to find `node`; the rest of PATH comes from this file. For tmux use `tmux split-window -v "tail -f {log}"`.
-Logs exist for services started by `wt-caddy` (`add --start`, `start`, `restart`) in `~/.local/state/wt-caddy/logs/`.
+Logs exist for services started by `wt-caddy` (`add --start`, `start`, `restart`) in `~/.local/state/wt-caddy/logs/`. Each start begins a fresh log and keeps the previous run once as `<name>.log.1`; `rm` and `gc` delete a removed route's logs. A single run's log is not rotated.

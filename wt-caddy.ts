@@ -39,10 +39,17 @@ const logDir = join(stateDir, "logs");
 // Starts a registered service detached, in its worktree, logging to ~/.local/state/wt-caddy/logs/.
 const routeLogFile = (r: Route) => join(logDir, `${sanitize(r.repo)}-${sanitize(r.branch)}-${sanitize(r.service)}.log`);
 
+// One run per log: the previous run's log is kept once, as <name>.log.1.
+const removeLogs = (r: Route) => {
+  rmSync(routeLogFile(r), { force: true });
+  rmSync(`${routeLogFile(r)}.1`, { force: true });
+};
+
 const startRoute = (r: Route) => {
   if (!r.cmd) return false;
   mkdirSync(logDir, { recursive: true });
-  const log = openSync(routeLogFile(r), "a");
+  if (existsSync(routeLogFile(r))) renameSync(routeLogFile(r), `${routeLogFile(r)}.1`);
+  const log = openSync(routeLogFile(r), "w");
   spawn("sh", ["-c", r.cmd], { cwd: r.path, detached: true, stdio: ["ignore", log, log] }).unref();
   return true;
 };
@@ -297,7 +304,10 @@ const main = async () => {
         const matches = (r: Route) =>
           r.repo === repo && r.branch === branch && (flags.service === undefined || r.service === flags.service);
         const next = readRoutes().filter((r) => !matches(r));
-        if ("kill" in flags) for (const r of readRoutes().filter(matches)) killListeners(r.port);
+        for (const r of readRoutes().filter(matches)) {
+          if ("kill" in flags) killListeners(r.port);
+          removeLogs(r);
+        }
         writeRoutes(next);
         await applyCaddy(next);
       });
@@ -349,6 +359,7 @@ const main = async () => {
       const removed = await withLock(async () => {
         const all = readRoutes();
         const next = all.filter((r) => existsSync(r.path));
+        for (const r of all) if (!existsSync(r.path)) removeLogs(r);
         writeRoutes(next);
         await applyCaddy(next);
         return all.length - next.length;
