@@ -7,14 +7,8 @@ const PANE = 'servers'
 const routes = atom({ plugin: 'wt-caddy-status', key: 'routes' } as const, [])
 const defined = atom({ plugin: 'wt-caddy-status', key: 'defined' } as const, [])
 
-// wt is a shell function in interactive shells; the binary is where brew puts it.
-const WT = '/opt/homebrew/bin/wt'
-
-// Hooks run wt-caddy by name, and a mod's process has no interactive PATH.
-const wtEnv = () => ({ PATH: `${home}/bin:/opt/homebrew/bin:/usr/bin:/bin` })
 
 let bin = ''
-let home = ''
 let lastStatus: string | undefined
 let lastRoutes = ''
 
@@ -46,7 +40,7 @@ const refresh = async ($: EngineInterface) => {
 // The services this worktree's post-start hooks define, registered or not.
 const loadDefined = async ($: EngineInterface) => {
   try {
-    const ran = await $.process.run([WT, 'hook', 'show', 'post-start', '--expanded', '--format', 'json'], { timeoutMs: 10000, env: wtEnv() })
+    const ran = await $.process.run([bin, 'hooks'], { timeoutMs: 10000 })
     const hooks = JSON.parse(ran.stdout) as { name: string; expanded: string }[]
     await update($, defined, () => parseDefined(hooks))
   } catch {
@@ -54,9 +48,16 @@ const loadDefined = async ($: EngineInterface) => {
   }
 }
 
+// Shows the service's log the way config.jsonc says (a kitty split, a tmux pane, ...); without that, toasts the path.
+const showLog = async ($: EngineInterface, r: Route) => {
+  const ran = await $.process.run([bin, 'logs', r.repo, r.branch, '--service', r.service, '--open'], { timeoutMs: 10000 })
+  const text = (ran.exitCode === 0 ? ran.stdout : ran.stderr).trim()
+  if (text) $.ui.toast(text)
+}
+
 // Runs the one hook that registers and starts a defined service.
 const startDefined = async ($: EngineInterface, d: Defined) => {
-  await $.process.run([WT, 'hook', 'post-start', d.name], { timeoutMs: 20000, env: wtEnv() })
+  await $.process.run([bin, 'hook', d.name], { timeoutMs: 20000 })
   await refresh($)
   await loadDefined($)
 }
@@ -76,8 +77,7 @@ const openFocused = async ($: EngineInterface) => {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    home = (await $.env.get('HOME')) ?? ''
-    bin = `${home}/bin/wt-caddy`
+    bin = `${await $.env.get('HOME')}/bin/wt-caddy`
     await $.command.register({ name: 'servers', description: 'Start, stop and open this worktree\'s dev servers' })
     $.clock.every(3000, () => refresh($))
     await refresh($)
@@ -102,6 +102,7 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {list.map(r => (
+          <Box key={`svc:${r.service}`} flexDirection="column">
           <Box key={`row:${r.service}`} flexDirection="row">
             <Text>
               {r.up ? '●' : '○'} {(r.service === 'main' ? 'dev' : r.service).padEnd(12)}
@@ -112,6 +113,11 @@ export const register: Register = on => {
               autoFocus={r === list[0] ? true : undefined}
               onPress={() => run($, r.up ? 'stop' : 'start', r)}
             />
+          </Box>
+          <Box key={`logrow:${r.service}`} flexDirection="row">
+            <Text dimColor>{'  '.padEnd(16)}</Text>
+            <Button key={`logs:${r.service}`} label="logs" dimColor onPress={() => showLog($, r)} />
+          </Box>
           </Box>
         ))}
         {idle.map(d => (

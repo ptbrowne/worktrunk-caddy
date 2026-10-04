@@ -37,13 +37,67 @@ const killListeners = (port: number) => {
 const logDir = join(stateDir, "logs");
 
 // Starts a registered service detached, in its worktree, logging to ~/.local/state/wt-caddy/logs/.
+const routeLogFile = (r: Route) => join(logDir, `${sanitize(r.repo)}-${sanitize(r.branch)}-${sanitize(r.service)}.log`);
+
 const startRoute = (r: Route) => {
   if (!r.cmd) return false;
   mkdirSync(logDir, { recursive: true });
-  const log = openSync(join(logDir, `${sanitize(r.repo)}-${sanitize(r.branch)}-${sanitize(r.service)}.log`), "a");
+  const log = openSync(routeLogFile(r), "a");
   spawn("sh", ["-c", r.cmd], { cwd: r.path, detached: true, stdio: ["ignore", log, log] }).unref();
   return true;
 };
+
+// ~/.config/wt-caddy/config.jsonc: "path" (extra PATH entries for everything wt-caddy runs) and
+// "logs.open" (shell command to show a log; {log} and {title} are filled in).
+type Config = { path?: string[]; logs?: { open?: string } };
+const configFile = join(homedir(), ".config/wt-caddy/config.jsonc");
+const DEFAULT_PATH = ["~/.local/share/fnm/aliases/default/bin", "~/Library/pnpm/bin", "/opt/homebrew/bin"];
+
+// JSON with // and /* */ comments and trailing commas.
+const parseJsonc = (src: string): unknown => {
+  let out = "";
+  let inString = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (inString) {
+      out += c;
+      if (c === "\\") out += src[++i] ?? "";
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+      out += c;
+    } else if (c === "/" && src[i + 1] === "/") {
+      while (i < src.length && src[i] !== "\n") i++;
+    } else if (c === "/" && src[i + 1] === "*") {
+      i += 2;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
+      i++;
+    } else out += c;
+  }
+  return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
+};
+
+let config: Config | undefined;
+const readConfig = (): Config => {
+  if (config) return config;
+  try {
+    config = parseJsonc(readFileSync(configFile, "utf8")) as Config;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") console.error(`ignoring ${configFile}: ${(e as Error).message}`);
+    config = {};
+  }
+  return config;
+};
+
+const expandHome = (p: string) => (p.startsWith("~/") ? join(homedir(), p.slice(2)) : p);
+
+// Added after the existing PATH, so the caller's own tools win.
+const applyConfigPath = () => {
+  const extra = (readConfig().path ?? DEFAULT_PATH).map(expandHome);
+  process.env.PATH = [process.env.PATH, ...extra].filter(Boolean).join(":");
+};
+
+const shellQuote = (v: string) => `'${v.replaceAll("'", "'\\''")}'`;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -203,15 +257,18 @@ const usage = `wt-caddy: Caddy routes and live dashboard for worktree dev server
   wt-caddy start|stop|restart <repo> <branch> [--service <name>]   (start needs --cmd from add)
   wt-caddy rm <repo> <branch> [--service <name>] [--kill]   (no --service: all; --kill stops the servers)
   wt-caddy ls [--json]
+  wt-caddy logs <repo> <branch> [--service <name>] [--open]   print the log path, or show it via config logs.open
+  wt-caddy hooks | hook <name>   post-start hooks of this worktree as JSON | run one (used by the Claude Code mod)
   wt-caddy gc                  drop routes whose worktree directory is gone
   wt-caddy service             start dashboard (and Caddy) if not running`;
 
 const main = async () => {
+  applyConfigPath();
   const [cmd, ...rest] = process.argv.slice(2);
   const flags: Record<string, string> = {};
   const pos: string[] = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === "--kill" || rest[i] === "--rewrite-host" || rest[i] === "--json" || rest[i] === "--start") flags[rest[i].slice(2)] = "";
+    if (rest[i] === "--kill" || rest[i] === "--rewrite-host" || rest[i] === "--json" || rest[i] === "--start" || rest[i] === "--open") flags[rest[i].slice(2)] = "";
     else if (rest[i].startsWith("--")) flags[rest[i].slice(2)] = rest[++i] ?? "";
     else pos.push(rest[i]);
   }
@@ -264,6 +321,30 @@ const main = async () => {
         }
       break;
     }
+    case "logs": {
+      const [repo, branch] = pos;
+      if (!repo || !branch) throw new Error(usage);
+      const slot = { repo, branch, service: flags.service ?? MAIN_SERVICE };
+      const r = readRoutes().find((x) => sameSlot(x, slot));
+      if (!r) throw new Error(`no route for ${repo} ${branch} ${slot.service}`);
+      const file = routeLogFile(r);
+      if (!existsSync(file)) throw new Error(`no log yet: ${file}`);
+      const open = readConfig().logs?.open;
+      if ("open" in flags && open) {
+        const title = `${r.service === MAIN_SERVICE ? "dev" : r.service} · ${r.branch}`;
+        execFileSync("sh", ["-c", open.replaceAll("{log}", shellQuote(file)).replaceAll("{title}", shellQuote(title))], { stdio: "inherit" });
+      } else console.log(file);
+      break;
+    }
+    case "hooks": // the post-start hooks of the worktree in the current directory, as JSON (for the Claude Code mod)
+      process.stdout.write(
+        execFileSync("wt", ["hook", "show", "post-start", "--expanded", "--format", "json"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }),
+      );
+      break;
+    case "hook": // run one post-start hook by name, in the current directory
+      if (!pos[0]) throw new Error(usage);
+      execFileSync("wt", ["hook", "post-start", pos[0]], { stdio: "ignore" });
+      break;
     case "gc": {
       const removed = await withLock(async () => {
         const all = readRoutes();

@@ -16,8 +16,8 @@ Run what is missing; skip what already works.
    cp <plugin>/wt-caddy.ts <plugin>/dashboard.html ~/.local/share/wt-caddy/
    cat > ~/bin/wt-caddy <<'SH'
    #!/bin/sh
-   # Hosts like Claude Code mods run without the interactive shell's PATH: add the usual node and pnpm homes.
-   PATH="$PATH:$HOME/.local/share/fnm/aliases/default/bin:$HOME/Library/pnpm/bin:/opt/homebrew/bin"
+   # Only finds node; wt-caddy adds the rest of PATH from ~/.config/wt-caddy/config.jsonc itself.
+   PATH="$PATH:$HOME/.local/share/fnm/aliases/default/bin:/opt/homebrew/bin"
    # The flag makes Node 22.6-23.5 run the .ts file too; newer versions ignore it.
    exec node --experimental-strip-types --disable-warning=ExperimentalWarning "$HOME/.local/share/wt-caddy/wt-caddy.ts" "$@"
    SH
@@ -32,12 +32,14 @@ Run what is missing; skip what already works.
    wt-caddy = "wt-caddy rm {{ repo }} {{ branch }} --kill"
    ```
    The `pre-remove` hook drops a worktree's routes and stops its dev servers in every repo. `wt config show` must print no warnings about these entries.
-4. **Start:** `wt-caddy service` (starts Caddy and the dashboard, idempotent). Open http://wt.localhost:8080. No DNS setup: browsers and curl resolve `*.localhost` to loopback.
+4. **Config (optional)** `~/.config/wt-caddy/config.jsonc`: `path` (extra PATH entries) and `logs.open` (how to show a log, e.g. a kitty split: `kitten @ launch --type=window --cwd=current --title {title} tail -f {log}`; tmux: `tmux split-window -v "tail -f {log}"`). See the README.
+5. **Start:** `wt-caddy service` (starts Caddy and the dashboard, idempotent). Open http://wt.localhost:8080. No DNS setup: browsers and curl resolve `*.localhost` to loopback.
 
 ## Daily use
 
 ```
 wt caddy ls                 # routes and whether each port is listening
+wt caddy logs <repo> <branch> [--service name] [--open]   # log path, or show it via config logs.open
 wt caddy gc                 # drop routes whose worktree directory is gone
 wt caddy start|stop|restart <repo> <branch> [--service name]   # needs --cmd from `add`
 wt caddy rm <repo> <branch> [--service name] [--kill]

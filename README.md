@@ -7,6 +7,7 @@ wt-caddy add <repo> <branch> <port> [--service name] [--path dir] [--rewrite-hos
 wt-caddy start|stop|restart <repo> <branch> [--service name]
 wt-caddy rm  <repo> <branch> [--service name] [--kill]
 wt-caddy ls [--json]
+wt-caddy logs <repo> <branch> [--service name] [--open]   # path, or show it via config logs.open
 wt-caddy gc        # drop routes whose worktree directory is gone
 wt-caddy service   # start Caddy and the dashboard if they aren't running
 ```
@@ -19,3 +20,21 @@ wt-caddy service   # start Caddy and the dashboard if they aren't running
 
 Needs Node 22.6+ (runs the `.ts` file directly; the shim passes `--experimental-strip-types`). `~/bin/wt-caddy` is a shim around `wt-caddy.ts`.
 Hooks: see `~/.claude/skills/setup-wt/SKILL.md`.
+
+## Config
+
+`~/.config/wt-caddy/config.jsonc` (JSON with comments), optional:
+
+```jsonc
+{
+  // Added after the existing PATH for everything wt-caddy runs. Replaces the defaults when set.
+  "path": ["~/.local/share/fnm/aliases/default/bin", "~/Library/pnpm/bin", "/opt/homebrew/bin"],
+  "logs": {
+    // {log} = file, {title} = label. Leave out to just print the path.
+    "open": "kitten @ launch --type=window --cwd=current --title {title} tail -f {log}"
+  }
+}
+```
+
+The `~/bin/wt-caddy` shim only has to find `node`; the rest of PATH comes from this file. For tmux use `tmux split-window -v "tail -f {log}"`.
+Logs exist for services started by `wt-caddy` (`add --start`, `start`, `restart`) in `~/.local/state/wt-caddy/logs/`.
