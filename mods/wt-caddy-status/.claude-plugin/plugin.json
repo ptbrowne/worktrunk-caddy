@@ -1,0 +1,1 @@
+{ "name": "wt-caddy-status", "version": "0.2.0", "description": "Dev servers of the session's worktree: status line entry and a /servers pane to start, stop, restart and open them", "types": "./types/index.d.ts" }

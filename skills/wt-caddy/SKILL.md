@@ -14,7 +14,13 @@ Run what is missing; skip what already works.
    ```bash
    mkdir -p ~/.local/share/wt-caddy ~/bin
    cp <plugin>/wt-caddy.ts <plugin>/dashboard.html ~/.local/share/wt-caddy/
-   printf '#!/bin/sh\nexec node "$HOME/.local/share/wt-caddy/wt-caddy.ts" "$@"\n' > ~/bin/wt-caddy && chmod +x ~/bin/wt-caddy
+   cat > ~/bin/wt-caddy <<'SH'
+   #!/bin/sh
+   # Hosts like Claude Code mods run without the interactive shell's PATH: add the usual node and pnpm homes.
+   PATH="$PATH:$HOME/.local/share/fnm/aliases/default/bin:$HOME/Library/pnpm:/opt/homebrew/bin"
+   exec node "$HOME/.local/share/wt-caddy/wt-caddy.ts" "$@"
+   SH
+   chmod +x ~/bin/wt-caddy
    ```
    `~/bin` must be on PATH. `wt` then also exposes it as `wt caddy ...`.
 3. **User-level wt config** (`~/.config/worktrunk/config.toml`), add if absent. Top-level keys go before any `[table]`:
@@ -32,11 +38,12 @@ Run what is missing; skip what already works.
 ```
 wt caddy ls                 # routes and whether each port is listening
 wt caddy gc                 # drop routes whose worktree directory is gone
+wt caddy start|stop|restart <repo> <branch> [--service name]   # needs --cmd from `add`
 wt caddy rm <repo> <branch> [--service name] [--kill]
 wt caddy service            # start Caddy + dashboard if not running
 ```
 
-Routes are added by repo hooks (`wt-caddy add <repo> <branch> <port> [--service name] [--rewrite-host] [--path dir]`), see setup-wt. The unnamed service gets `<branch>.<repo>.localhost:8080`, others `<service>.<branch>.<repo>.localhost:8080`.
+Routes are added by repo hooks (`wt-caddy add <repo> <branch> <port> [--service name] [--rewrite-host] [--path dir] [--cmd '<command>'] [--start]`; `--cmd` is what start/restart run, `--start` runs it now, logs in `~/.local/state/wt-caddy/logs/`), see setup-wt. The unnamed service gets `<branch>.<repo>.localhost:8080`, others `<service>.<branch>.<repo>.localhost:8080`.
 
 ## Troubleshooting
 

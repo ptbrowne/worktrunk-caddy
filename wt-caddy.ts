@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-type Route = { repo: string; branch: string; service: string; port: number; path: string; rewriteHost?: boolean };
+type Route = { repo: string; branch: string; service: string; port: number; path: string; rewriteHost?: boolean; cmd?: string };
 type RouteStatus = Route & { host: string; up: boolean };
 
 const CADDY_ADMIN = "http://localhost:2019";
@@ -32,6 +32,17 @@ const killListeners = (port: number) => {
   } catch {
     // nothing listening
   }
+};
+
+const logDir = join(stateDir, "logs");
+
+// Starts a registered service detached, in its worktree, logging to ~/.local/state/wt-caddy/logs/.
+const startRoute = (r: Route) => {
+  if (!r.cmd) return false;
+  mkdirSync(logDir, { recursive: true });
+  const log = openSync(join(logDir, `${sanitize(r.repo)}-${sanitize(r.branch)}-${sanitize(r.service)}.log`), "a");
+  spawn("sh", ["-c", r.cmd], { cwd: r.path, detached: true, stdio: ["ignore", log, log] }).unref();
+  return true;
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -188,7 +199,8 @@ const runDashboard = async () => {
 
 const usage = `wt-caddy: Caddy routes and live dashboard for worktree dev servers
 
-  wt-caddy add <repo> <branch> <port> [--service <name>] [--path <dir>] [--rewrite-host]
+  wt-caddy add <repo> <branch> <port> [--service <name>] [--path <dir>] [--rewrite-host] [--cmd <shell command>] [--start]
+  wt-caddy start|stop|restart <repo> <branch> [--service <name>]   (start needs --cmd from add)
   wt-caddy rm <repo> <branch> [--service <name>] [--kill]   (no --service: all; --kill stops the servers)
   wt-caddy ls [--json]
   wt-caddy gc                  drop routes whose worktree directory is gone
@@ -199,7 +211,7 @@ const main = async () => {
   const flags: Record<string, string> = {};
   const pos: string[] = [];
   for (let i = 0; i < rest.length; i++) {
-    if (rest[i] === "--kill" || rest[i] === "--rewrite-host" || rest[i] === "--json") flags[rest[i].slice(2)] = "";
+    if (rest[i] === "--kill" || rest[i] === "--rewrite-host" || rest[i] === "--json" || rest[i] === "--start") flags[rest[i].slice(2)] = "";
     else if (rest[i].startsWith("--")) flags[rest[i].slice(2)] = rest[++i] ?? "";
     else pos.push(rest[i]);
   }
@@ -209,7 +221,7 @@ const main = async () => {
       const [repo, branch, portArg] = pos;
       const port = Number(portArg);
       if (!repo || !branch || !Number.isInteger(port)) throw new Error(usage);
-      const route: Route = { repo, branch, service: flags.service ?? MAIN_SERVICE, port, path: flags.path ?? process.cwd(), ...("rewrite-host" in flags && { rewriteHost: true }) };
+      const route: Route = { repo, branch, service: flags.service ?? MAIN_SERVICE, port, path: flags.path ?? process.cwd(), ...("rewrite-host" in flags && { rewriteHost: true }), ...(flags.cmd && { cmd: flags.cmd }) };
       const all = await withLock(async () => {
         const next = [...readRoutes().filter((r) => !sameSlot(r, route)), route];
         writeRoutes(next);
@@ -217,6 +229,7 @@ const main = async () => {
         return next;
       });
       await ensureService();
+      if ("start" in flags && !(await isListening(port))) startRoute(route);
       console.log(`${url(hostFor(route))} -> :${port} (${all.length} routes)`);
       break;
     }
@@ -231,6 +244,24 @@ const main = async () => {
         writeRoutes(next);
         await applyCaddy(next);
       });
+      break;
+    }
+    case "start":
+    case "stop":
+    case "restart": {
+      const [repo, branch] = pos;
+      if (!repo || !branch) throw new Error(usage);
+      const mine = readRoutes().filter(
+        (r) => r.repo === repo && r.branch === branch && (flags.service === undefined || r.service === flags.service),
+      );
+      if (mine.length === 0) throw new Error(`no routes for ${repo} ${branch}`);
+      if (cmd !== "start") for (const r of mine) killListeners(r.port);
+      if (cmd === "restart") for (const r of mine) for (let i = 0; i < 30 && (await isListening(r.port)); i++) await sleep(100);
+      if (cmd !== "stop")
+        for (const r of mine) {
+          if (await isListening(r.port)) continue;
+          console.log(startRoute(r) ? `started ${r.service}` : `${r.service}: no --cmd registered`);
+        }
       break;
     }
     case "gc": {

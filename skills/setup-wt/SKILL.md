@@ -32,16 +32,16 @@ copy = "wt step copy-ignored"
 install = "pnpm install"
 
 [projects."github.com/<owner>/<repo>".post-start]    # background, concurrent
-server = "pnpm dev --port {{ branch | hash_port }}"
-storybook = "pnpm storybook --port {{ (branch ~ \"storybook\") | hash_port }} --no-open"
-route-server = "wt-caddy add {{ repo }} {{ branch }} {{ branch | hash_port }} --path {{ worktree_path }}"
-route-storybook = "wt-caddy add {{ repo }} {{ branch }} {{ (branch ~ \"storybook\") | hash_port }} --service storybook --rewrite-host --path {{ worktree_path }}"
+# One hook per service: registers the route, remembers the command (for start/stop/restart), starts it.
+server = "wt-caddy add {{ repo }} {{ branch }} {{ branch | hash_port }} --path {{ worktree_path }} --cmd 'pnpm dev --port {{ branch | hash_port }}' --start"
+storybook = "wt-caddy add {{ repo }} {{ branch }} {{ (branch ~ \"storybook\") | hash_port }} --service storybook --rewrite-host --path {{ worktree_path }} --cmd 'pnpm storybook --port {{ (branch ~ \"storybook\") | hash_port }} --no-open' --start"
 open = "sleep 2; open http://{{ branch | sanitize }}.{{ repo }}.localhost:8080"
 ```
 
 - The unnamed service (no `--service`) gets `<branch>.<repo>.localhost`; others `<service>.<branch>.<repo>.localhost`.
 - Each service needs its own `hash_port` seed: `branch` for the main one, `branch ~ "<name>"` for the others.
-- Drop storybook lines if the repo has none. Prefix env vars on the command (`PORT=... pnpm ...`).
+- `--cmd` is stored in the registry and run by `wt-caddy start|restart` in the worktree directory, so it must be self-contained. Keep it in single quotes; only digits and `sanitize` output (`[a-z0-9-]`) are interpolated into it.
+- Drop storybook lines if the repo has none. Prefix env vars inside the `--cmd` string (`PORT=... pnpm ...`).
 - Playwright: append `PLAYWRIGHT_BASE_URL=http://localhost:{{ branch | hash_port }}` to `.env.local` in a further pre-start step only if the playwright config's `webServer.url` follows it; otherwise tests start their own server on the default port.
 - `[list] url` (the URL column in `wt list`) is project-config-only in wt 0.80, so it is not set here. The dashboard lists every URL.
 - Pipelines: each `[[...pre-start]]` block is one step, run in order; keys inside a block run concurrently. A failing step aborts the rest.

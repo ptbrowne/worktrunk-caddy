@@ -3,7 +3,8 @@
 Routes git-worktree dev servers through Caddy and shows them on a live dashboard. Companion to [worktrunk](https://worktrunk.dev) (`wt`), which owns creating worktrees, copying files and starting servers. `wt-caddy` only owns URLs.
 
 ```
-wt-caddy add <repo> <branch> <port> [--service name] [--path dir] [--rewrite-host]
+wt-caddy add <repo> <branch> <port> [--service name] [--path dir] [--rewrite-host] [--cmd '<command>'] [--start]
+wt-caddy start|stop|restart <repo> <branch> [--service name]
 wt-caddy rm  <repo> <branch> [--service name] [--kill]
 wt-caddy ls [--json]
 wt-caddy gc        # drop routes whose worktree directory is gone
