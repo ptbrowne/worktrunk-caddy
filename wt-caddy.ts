@@ -216,6 +216,24 @@ const statuses = async (routes: Route[]): Promise<RouteStatus[]> =>
 const sameSlot = (a: Route, b: Pick<Route, "repo" | "branch" | "service">) =>
   a.repo === b.repo && a.branch === b.branch && a.service === b.service;
 
+// Drops routes whose worktree directory is gone and stops their orphaned servers. Returns how many.
+// Skips the lock and Caddy when nothing is stale, so a plain `ls` stays read-only.
+const pruneStale = async () => {
+  if (readRoutes().every((r) => existsSync(r.path))) return 0;
+  return withLock(async () => {
+    const all = readRoutes();
+    const next = all.filter((r) => existsSync(r.path));
+    for (const r of all) {
+      if (existsSync(r.path)) continue;
+      killListeners(r.port);
+      removeLogs(r);
+    }
+    writeRoutes(next);
+    await applyCaddy(next);
+    return all.length - next.length;
+  });
+};
+
 const url = (host: string) => `http://${host}:${CADDY_PORT}`;
 
 const ensureService = async () => {
@@ -236,6 +254,7 @@ const runDashboard = async () => {
   let last = "";
 
   const push = async () => {
+    await pruneStale().catch((e) => console.error(`prune failed: ${e instanceof Error ? e.message : e}`));
     const payload = JSON.stringify(await statuses(readRoutes()));
     if (payload === last) return;
     last = payload;
@@ -276,7 +295,7 @@ const usage = `wt-caddy: Caddy routes and live dashboard for worktree dev server
   wt-caddy logs <repo> <branch> [--service <name>] [--open]   print the log path, or show it via config logs.open
   wt-caddy ui                 interactive list: start/stop/restart, open the URL, tail logs
   wt-caddy hooks | hook <name>   post-start hooks of this worktree as JSON | run one (used by the Claude Code mod)
-  wt-caddy gc                  drop routes whose worktree directory is gone
+  wt-caddy gc                  drop routes whose worktree directory is gone (ls, the dashboard and ui do this too)
   wt-caddy service             start dashboard (and Caddy) if not running`;
 
 const main = async () => {
@@ -362,19 +381,13 @@ const main = async () => {
       if (!pos[0]) throw new Error(usage);
       execFileSync("wt", ["hook", "post-start", pos[0]], { stdio: "ignore" });
       break;
-    case "gc": {
-      const removed = await withLock(async () => {
-        const all = readRoutes();
-        const next = all.filter((r) => existsSync(r.path));
-        for (const r of all) if (!existsSync(r.path)) removeLogs(r);
-        writeRoutes(next);
-        await applyCaddy(next);
-        return all.length - next.length;
-      });
-      console.log(`removed ${removed} stale route(s)`);
+    case "gc":
+      console.log(`removed ${await pruneStale()} stale route(s)`);
       break;
-    }
     case "ls": {
+      // Worktrees removed outside `wt remove` (plain git, rm -rf) never ran the pre-remove hook.
+      const pruned = await pruneStale();
+      if (pruned) console.error(`pruned ${pruned} stale route(s)`);
       const all = await statuses(readRoutes());
       if ("json" in flags) {
         console.log(JSON.stringify(all));
@@ -390,7 +403,7 @@ const main = async () => {
     }
     case "ui": {
       const { runUi } = await import("./ui.ts");
-      await runUi({ stateDir, readRoutes, statuses, startRoute, killListeners, routeLogFile, openLog, urlOf: (r) => url(hostFor(r)), isListening, sleep });
+      await runUi({ stateDir, readRoutes, pruneStale, statuses, startRoute, killListeners, routeLogFile, openLog, urlOf: (r) => url(hostFor(r)), isListening, sleep });
       break;
     }
     case "__serve":

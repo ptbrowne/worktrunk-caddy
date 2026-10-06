@@ -7,6 +7,7 @@ import type { Route, RouteStatus } from "./wt-caddy.ts";
 export type Api = {
   stateDir: string;
   readRoutes: () => Route[];
+  pruneStale: () => Promise<number>; // drops routes whose worktree is gone
   statuses: (routes: Route[]) => Promise<RouteStatus[]>;
   startRoute: (r: Route) => boolean;
   killListeners: (port: number) => void;
@@ -168,6 +169,7 @@ export const runUi = async (api: Api) => {
     if (refreshing) return;
     refreshing = true;
     try {
+      await api.pruneStale().catch(() => 0);
       const routes = order(await api.statuses(api.readRoutes()), state.cwd);
       const busy = { ...state.busy };
       let notice = state.notice;
