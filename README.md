@@ -2,13 +2,26 @@
 
 Routes git-worktree dev servers through Caddy and shows them on a live dashboard. Companion to [worktrunk](https://worktrunk.dev) (`wt`, [docs](https://worktrunk.dev/hook/)), which owns creating worktrees, copying files and starting servers. The command is `wt-caddy`, and it only owns URLs.
 
-## Quick usage
+## Install
 
-Needs [Caddy](https://caddyserver.com) and Node 22.6+.
+Needs [Caddy](https://caddyserver.com) and Node 22.6+ (`brew install caddy node`). Add [worktrunk](https://worktrunk.dev) if you want hooks to do the registering.
 
 ```bash
 git clone https://github.com/ptbrowne/worktrunk-caddy ~/code/wt-caddy
-# put a shim on your PATH (see skills/wt-caddy/SKILL.md for the exact one)
+mkdir -p ~/bin
+cat > ~/bin/wt-caddy <<'SH'
+#!/bin/sh
+# The flag makes Node 22.6-23.5 run the .ts file too; newer versions ignore it.
+exec node --experimental-strip-types --disable-warning=ExperimentalWarning "$HOME/code/wt-caddy/wt-caddy.ts" "$@"
+SH
+chmod +x ~/bin/wt-caddy
+```
+
+`~/bin` must be on your `PATH`. The shim only has to find `node`. If `node` isn't on the `PATH` of the shell that runs it (a version manager, say), add its directory to the shim's `PATH`. Everything else `wt-caddy` runs gets its `PATH` from the [config file](#config). Update with `git pull`. Once the command is on `PATH`, `wt caddy ...` works too.
+
+## Quick usage
+
+```bash
 wt-caddy service        # starts Caddy and the dashboard
 
 # in a worktree, register its dev server on a stable port and start it
